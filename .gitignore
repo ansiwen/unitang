@@ -1,0 +1,56 @@
+*~
+*.annot
+*.cmo
+*.cma
+*.cmi
+*.a
+*.o
+*.cmx
+*.cmxs
+*.cmxa
+
+# ocamlbuild working directory
+_build/
+
+docker/build
+
+# ocamlbuild targets
+*.byte
+*.native
+
+# oasis generated files
+setup.data
+setup.log
+
+# mirage
+.*.swp
+#.merlin
+*.xe
+*.xml
+backend.ml
+main.ml
+myocamlbuild.ml
+**/Makefile
+Makefile.*
+!lwt/Makefile
+!./Makefile
+.mirage.config
+
+# Generated outputs
+*.cfg
+*.xen
+*.map
+*.img
+*.xl
+*.xl.in
+*.opam
+*.ukvm
+*.virtio
+static*.ml
+static*.mli
+mir-*
+unitang
+**/log
+make-fat*-image.sh
+key_gen.ml
+ukvm-bin
