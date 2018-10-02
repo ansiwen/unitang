@@ -6,7 +6,7 @@ module YB = Yojson.Basic
 let api_src = Logs.Src.create "api" ~doc:"Tang REST API"
 module Api_log = (val Logs.src_log api_src : Logs.LOG)
 
-module Dispatch (H:Cohttp_lwt.S.Server)(Clock:Webmachine.CLOCK) = struct
+module Dispatcher (H:Cohttp_lwt.S.Server)(Clock:Webmachine.CLOCK) = struct
   let jsend_error msg =
     `Assoc [
       ("status", `String "error");
@@ -123,7 +123,7 @@ module Dispatch (H:Cohttp_lwt.S.Server)(Clock:Webmachine.CLOCK) = struct
 
   end (* recovery *)
 
-  let dispatcher request body =
+  let dispatch request body =
     let open Cohttp in
     (* Perform route dispatch. If [None] is returned, then the URI path did
     not match any of the route patterns. In this case the server should

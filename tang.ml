@@ -7,19 +7,19 @@ module type HTTP_SERVER = Cohttp_lwt.S.Server
 let http_src = Logs.Src.create "http" ~doc:"HTTP server"
 module Http_log = (val Logs.src_log http_src : Logs.LOG)
 
-module Dispatch
+module Dispatcher
     (Serv: HTTP_SERVER)
     (Clock: Webmachine.CLOCK)
 = struct
 
-  module API = Api.Dispatch(Serv)(Clock)
+  module API = Api.Dispatcher(Serv)(Clock)
 
   let serve =
     let callback (_, cid) request body =
       let uri = Cohttp.Request.uri request in
       let cid = Cohttp.Connection.to_string cid in
       Http_log.info (fun f -> f "[%s] serving %s." cid (Uri.to_string uri));
-      API.dispatcher request body
+      API.dispatch request body
     in
     let conn_closed (_,cid) =
       let cid = Cohttp.Connection.to_string cid in
@@ -42,7 +42,7 @@ module Main
         in
         int_of_d_ps @@ Pclock.now_d_ps clock
     end in
-    let module D = Dispatch(Http_srv)(WmClock) in
+    let module D = Dispatcher(Http_srv)(WmClock) in
     let http_port = Key_gen.http_port () in
     let tcp = `TCP http_port in
     Http_log.info (fun f -> f "listening on %d/TCP" http_port);
