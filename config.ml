@@ -3,7 +3,7 @@ open Mirage
 let stack = generic_stackv4 default_network
 
 (* set ~tls to false to get a plain-http server *)
-let con = conduit_direct ~tls:true stack
+let http_srv = http_server @@ conduit_direct ~tls:false stack
 
 let http_port =
   let doc = Key.Arg.info ~doc:"Listening HTTP port." ["port"] in
@@ -23,16 +23,13 @@ let adv_jws =
 let main =
   let packages = [
     package "cohttp-mirage";
-    package "uri";
-    package "magic-mime";
     package "yojson";
     package ~min:"0.6.0" "webmachine";
-    package "ppx_sexp_conv";
   ] in
   let keys = [ http_port; d_key; adv_jws ] in
   foreign
     ~packages ~keys
-    "Tang.Main" (pclock @-> conduit @-> job)
+    "Tang.Main" (pclock @-> http @-> job)
 
 let () =
-  register "unitang" [main $ default_posix_clock $ con]
+  register "unitang" [main $ default_posix_clock $ http_srv]

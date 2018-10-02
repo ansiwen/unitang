@@ -1,4 +1,4 @@
-open Lwt.Infix
+(* open Lwt.Infix *)
 
 (** Common signature for http and https. *)
 module type HTTP_SERVER = Cohttp_lwt.S.Server
@@ -31,12 +31,10 @@ end
 
 module Main
     (Pclock: Mirage_types.PCLOCK)
-    (Con: Conduit_mirage.S)
+    (Http_srv: HTTP_SERVER)
 = struct
 
-  module Http_srv = Cohttp_mirage.Server_with_conduit
-
-  let start clock con =
+  let start clock http_srv =
     let module WmClock = struct
       let now = fun () ->
         let int_of_d_ps (d, ps) =
@@ -45,7 +43,6 @@ module Main
         int_of_d_ps @@ Pclock.now_d_ps clock
     end in
     let module D = Dispatch(Http_srv)(WmClock) in
-    Cohttp_mirage.Server_with_conduit.connect con >>= fun http_srv ->
     let http_port = Key_gen.http_port () in
     let tcp = `TCP http_port in
     Http_log.info (fun f -> f "listening on %d/TCP" http_port);
