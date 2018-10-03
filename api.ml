@@ -32,7 +32,6 @@ module Dispatcher (H:Cohttp_lwt.S.Server)(Clock:Webmachine.CLOCK) = struct
     else
       s
 
-
   let b64_encode = B64.encode ~pad:true ~alphabet:B64.uri_safe_alphabet
 
   let b64_decode = B64.decode ~alphabet:B64.uri_safe_alphabet
@@ -44,6 +43,10 @@ module Dispatcher (H:Cohttp_lwt.S.Server)(Clock:Webmachine.CLOCK) = struct
   (* let b64_of_z z = b64_encode (Z.to_bits z)
 
   let z_of_b64 s = Nocrypto.Numeric.Z. (b64_decode s) *)
+
+  let d_key = Key_gen.d_key () |> z_of_b64
+
+  let adv_jws = Key_gen.adv_jws ()
 
   (* Apply the [Webmachine.Make] functor to the Lwt_unix-based IO module
    * exported by cohttp. For added convenience, include the [Rd] module
@@ -65,8 +68,8 @@ module Dispatcher (H:Cohttp_lwt.S.Server)(Clock:Webmachine.CLOCK) = struct
     inherit [Cohttp_lwt.Body.t] Wm.resource
 
     method private to_json rd =
-      let adv_jws = Key_gen.adv_jws () in
       Wm.continue (`String adv_jws) rd
+
     method! allowed_methods rd =
       Wm.continue [`GET] rd
 
@@ -99,11 +102,10 @@ module Dispatcher (H:Cohttp_lwt.S.Server)(Clock:Webmachine.CLOCK) = struct
         Cohttp_lwt.Body.to_string rd.Wm.Rd.req_body
         >>= fun body ->
         let data = YB.from_string body in
-        let d = Key_gen.d_key () |> z_of_b64 in
         let x = YB.Util.member "x" data |> YB.Util.to_string |> z_of_b64 in
         let y = YB.Util.member "y" data |> YB.Util.to_string |> z_of_b64 in
         let p1 = ( x, y, Curve.F521BIT.one ) in
-        let p2 = Curve.E521BIT.multiply d p1 in
+        let p2 = Curve.E521BIT.multiply d_key p1 in
         let x2, y2 =  Curve.E521BIT.to_affine_coord p2 in
         let response = `Assoc [
           ("alg", `String "ECMR");
