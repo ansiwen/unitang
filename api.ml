@@ -44,9 +44,25 @@ module Dispatcher (H:Cohttp_lwt.S.Server)(Clock:Webmachine.CLOCK) = struct
 
   let z_of_b64 s = Nocrypto.Numeric.Z. (b64_decode s) *)
 
-  let d_key = Key_gen.d_key () |> z_of_b64
-
   let adv_jws = Key_gen.adv_jws ()
+
+  let crv_module, d_key =
+    let data = YB.from_string (Key_gen.d_jwk ()) in
+    let alg = YB.Util.member "alg" data |> YB.Util.to_string in
+    let crv = YB.Util.member "crv" data |> YB.Util.to_string in
+    let d = YB.Util.member "d" data |>  YB.Util.to_string |> z_of_b64 in
+    let key_ops = YB.Util.member "key_ops" data |> YB.Util.to_list |> YB.Util.filter_string in
+    let kty = YB.Util.member "kty" data |> YB.Util.to_string in
+    assert (alg = "ECMR");
+    assert (List.mem "deriveKey" key_ops);
+    assert (kty = "EC");
+    let crv_module : (module Curve.S) = match crv with
+    | "P-521" -> (module Curve.P521)
+    | "P-224" -> (module Curve.P224)
+    | "P-192" -> (module Curve.P192)
+    | _ -> assert false
+    in
+    crv_module, d
 
   (* Apply the [Webmachine.Make] functor to the Lwt_unix-based IO module
    * exported by cohttp. For added convenience, include the [Rd] module
@@ -101,12 +117,11 @@ module Dispatcher (H:Cohttp_lwt.S.Server)(Clock:Webmachine.CLOCK) = struct
       begin try
         Cohttp_lwt.Body.to_string rd.Wm.Rd.req_body
         >>= fun body ->
+        let (module Crv) = crv_module in
         let data = YB.from_string body in
         let x = YB.Util.member "x" data |> YB.Util.to_string |> z_of_b64 in
         let y = YB.Util.member "y" data |> YB.Util.to_string |> z_of_b64 in
-        let p1 = ( x, y, Curve.F521BIT.one ) in
-        let p2 = Curve.E521BIT.multiply d_key p1 in
-        let x2, y2 =  Curve.E521BIT.to_affine_coord p2 in
+        let x2, y2 = Crv.multiply d_key (x, y) in
         let response = `Assoc [
           ("alg", `String "ECMR");
           ("crv", `String "P-521");
@@ -123,7 +138,7 @@ module Dispatcher (H:Cohttp_lwt.S.Server)(Clock:Webmachine.CLOCK) = struct
       let resp_body = `String (YB.to_string ~std:true json) in
       Wm.continue true { rd with Wm.Rd.resp_body }
 
-  end (* recovery *)
+  end (* recover *)
 
   let dispatch request body =
     let open Cohttp in

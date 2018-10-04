@@ -9,9 +9,9 @@ let http_port =
   let doc = Key.Arg.info ~doc:"Listening HTTP port." ["port"] in
   Key.abstract Key.(create "http_port" Arg.(opt int 8080 doc))
 
-let d_key =
-  let doc = Key.Arg.info ~doc:"derive key base64 encoded." ["dkey"] in
-  Key.abstract Key.(create "d_key"
+let d_jwk =
+  let doc = Key.Arg.info ~doc:"The jwk of the derive key." ["dkey"] in
+  Key.abstract Key.(create "d_jwk"
     Arg.(required ~stage:`Both string doc))
 
 let adv_jws =
@@ -26,7 +26,7 @@ let main =
     package "yojson";
     package ~min:"0.6.0" "webmachine";
   ] in
-  let keys = [ http_port; d_key; adv_jws ] in
+  let keys = [ http_port; d_jwk; adv_jws ] in
   foreign
     ~packages ~keys
     "Tang.Main" (pclock @-> http @-> job)
