@@ -11,6 +11,7 @@
 
 # ocamlbuild working directory
 _build/
+_build-solo5-hvt/
 
 docker/build
 
@@ -50,7 +51,10 @@ static*.ml
 static*.mli
 mir-*
 unitang
+unitang.hvt
 **/log
 make-fat*-image.sh
 key_gen.ml
 ukvm-bin
+solo5-hvt
+
