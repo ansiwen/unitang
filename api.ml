@@ -40,29 +40,50 @@ module Dispatcher (H:Cohttp_lwt.S.Server)(Clock:Webmachine.CLOCK) = struct
 
   let z_of_b64 s = b64_decode s |> string_rev |> Z.of_bits
 
+  let json_member s json =
+    let m = YB.Util.member s json in
+    match m with
+      | `Null -> failwith ("Malformed JSON, missing member: " ^ s)
+      | x -> x
+
+  let json_string s json =
+    let m = json_member s json in
+    match m with
+      | `String x -> x
+      | _ -> failwith ("Malformed JSON, member " ^ s ^ " is not a string")
+
   (* let b64_of_z z = b64_encode (Z.to_bits z)
 
   let z_of_b64 s = Nocrypto.Numeric.Z. (b64_decode s) *)
 
   let adv_jws = Key_gen.adv_jws ()
 
-  let crv_module, d_key =
+  let crv, d_key =
     let data = YB.from_string (Key_gen.d_jwk ()) in
-    let alg = YB.Util.member "alg" data |> YB.Util.to_string in
-    let crv = YB.Util.member "crv" data |> YB.Util.to_string in
-    let d = YB.Util.member "d" data |>  YB.Util.to_string |> z_of_b64 in
-    let key_ops = YB.Util.member "key_ops" data |> YB.Util.to_list |> YB.Util.filter_string in
-    let kty = YB.Util.member "kty" data |> YB.Util.to_string in
-    assert (alg = "ECMR");
-    assert (List.mem "deriveKey" key_ops);
-    assert (kty = "EC");
-    let crv_module : (module Curve.S) = match crv with
+    let alg = json_string "alg" data in
+    let crv = json_string "crv" data in
+    let d = json_string "d" data |> z_of_b64 in
+    let key_ops = json_member "key_ops" data |> YB.Util.to_list |> YB.Util.filter_string in
+    let kty = json_string "kty" data in
+    if not (alg = "ECMR") then
+      failwith ("Unsupported algorithm: " ^ alg)
+    else
+    if not (List.mem "deriveKey" key_ops) then
+      failwith ("key_ops does not contain deriveKey")
+    else
+    if not (kty = "EC") then
+      failwith ("Unsupported key type: " ^ kty)
+    else
+    crv, d
+
+  let crv_module =
+    let c : (module Curve.S) = match crv with
     | "P-521" -> (module Curve.P521)
     | "P-224" -> (module Curve.P224)
     | "P-192" -> (module Curve.P192)
-    | _ -> assert false
+    | _ -> failwith ("Unsuported curve: " ^ crv)
     in
-    crv_module, d
+    c
 
   (* Apply the [Webmachine.Make] functor to the Lwt_unix-based IO module
    * exported by cohttp. For added convenience, include the [Rd] module
@@ -102,6 +123,9 @@ module Dispatcher (H:Cohttp_lwt.S.Server)(Clock:Webmachine.CLOCK) = struct
   class recover = object
     inherit [Cohttp_lwt.Body.t] Wm.resource
 
+    val mutable x_req = Z.zero
+    val mutable y_req = Z.zero
+
     method! allowed_methods rd =
       Wm.continue [`POST] rd
 
@@ -113,30 +137,53 @@ module Dispatcher (H:Cohttp_lwt.S.Server)(Clock:Webmachine.CLOCK) = struct
     method content_types_accepted rd =
       Wm.continue [] rd
 
-    method! process_post rd =
+    method! malformed_request rd =
       begin try
         Cohttp_lwt.Body.to_string rd.Wm.Rd.req_body
         >>= fun body ->
-        let (module Crv) = crv_module in
+        Api_log.debug (fun f -> f "Request body:\n%s" body);
         let data = YB.from_string body in
-        let x = YB.Util.member "x" data |> YB.Util.to_string |> z_of_b64 in
-        let y = YB.Util.member "y" data |> YB.Util.to_string |> z_of_b64 in
-        let x2, y2 = Crv.multiply d_key (x, y) in
+        let alg = json_string "alg" data in
+        let crv_req = json_string "crv" data in
+        let kty = json_string "kty" data in
+        if not (alg = "ECMR") then
+          failwith ("Unsupported algorithm: " ^ alg)
+        else
+        if not (kty = "EC") then
+          failwith ("Unsupported key type: " ^ kty)
+        else
+        if not (crv_req = crv) then
+          failwith ("Curve doesn't match: " ^ crv_req)
+        else
+        x_req <- json_string "x" data |> z_of_b64;
+        y_req <- json_string "y" data |> z_of_b64;
+        Wm.continue false rd
+      with
+        | e ->
+          let json = (Printexc.to_string e |> jsend_error) in
+          let resp_body = `String (YB.to_string ~std:true json) in
+          Wm.continue true { rd with Wm.Rd.resp_body }
+      end
+
+    method! process_post rd =
+      begin try
+        let (module Crv) = crv_module in
+        let x, y = Crv.multiply d_key (x_req, y_req) in
         let response = `Assoc [
           ("alg", `String "ECMR");
-          ("crv", `String "P-521");
+          ("crv", `String crv);
           ("key_ops", `List [ `String "deriveKey" ]);
           ("kty", `String "EC");
-          ("x", `String (b64_of_z x2));
-          ("y", `String (b64_of_z y2));
+          ("x", `String (b64_of_z x));
+          ("y", `String (b64_of_z y));
         ] in
-        Lwt.return response
+        Lwt.return (response, true)
       with
-        | e -> Lwt.return (Printexc.to_string e |> jsend_error)
+        | e -> Lwt.return ((Printexc.to_string e |> jsend_error), false)
       end
-      >>= fun json ->
+      >>= fun (json, ok) ->
       let resp_body = `String (YB.to_string ~std:true json) in
-      Wm.continue true { rd with Wm.Rd.resp_body }
+      Wm.continue ok { rd with Wm.Rd.resp_body }
 
   end (* recover *)
 
@@ -145,6 +192,8 @@ module Dispatcher (H:Cohttp_lwt.S.Server)(Clock:Webmachine.CLOCK) = struct
     (* Perform route dispatch. If [None] is returned, then the URI path did
     not match any of the route patterns. In this case the server should
     return a 404 [`Not_found]. *)
+    Api_log.debug (fun f ->
+      f "Request header:\n%s" (Request.headers request |> Header.to_string));
     let routes = [
       ("/adv", fun () -> new advertise) ;
       ("/adv/:id", fun () -> new advertise) ;
@@ -156,8 +205,8 @@ module Dispatcher (H:Cohttp_lwt.S.Server)(Clock:Webmachine.CLOCK) = struct
       | _ -> Wm.dispatch' routes ~body ~request
     end
     >|= begin function
-      | None        -> (`Not_found, Header.init (), `String "Not found", [])
-      | Some result -> result
+        | None        -> (`Not_found, Header.init (), `String "Not found", [])
+        | Some result -> result
     end
     >>= fun (status, headers, body, path) ->
       let headers = add_common_headers headers in

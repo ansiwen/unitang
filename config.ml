@@ -10,13 +10,13 @@ let http_port =
   Key.abstract Key.(create "http_port" Arg.(opt int 8080 doc))
 
 let d_jwk =
-  let doc = Key.Arg.info ~doc:"The jwk of the derive key." ["dkey"] in
+  let doc = Key.Arg.info ~doc:"The jwk of the deriving key." ["dkey"] in
   Key.abstract Key.(create "d_jwk"
     Arg.(required ~stage:`Both string doc))
 
 let adv_jws =
   let doc = Key.Arg.info ~doc:"The advertised jws containing the public key of \
-    the derive key." ["adv"] in
+    the deriving key." ["adv"] in
   Key.abstract Key.(create "adv_jws"
     Arg.(required ~stage:`Both string doc))
 

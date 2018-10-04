@@ -52,8 +52,7 @@ module type S = Sig.CURVE
 module Make
   (F : Field.t with type element = Z.t)
   (Spec: Ec.Spec with type element = Z.t)
-  =
-struct
+= struct
   module E = Ec.Make (F) (Spec)
   let multiply f p =
     let x, y = p in
