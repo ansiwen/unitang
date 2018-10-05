@@ -2,6 +2,9 @@ PKG lwt mirage mirage-types-lwt cohttp-mirage mirage-conduit
 PKG yojson webmachine
 PKG ppx_sexp_conv
 S .
+S src
+S src/ecc
 B _build
+B _build/src
 B _build-solo5-hvt
-
+B _build-solo5-hvt/src

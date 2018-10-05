@@ -1,4 +1,5 @@
 open Big_int_Z
+open Ecc
 
 module P192BIT = struct
   type element = Z.t
