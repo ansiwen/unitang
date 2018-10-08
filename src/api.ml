@@ -126,6 +126,7 @@ module Dispatcher (H:Cohttp_lwt.S.Server)(Clock:Webmachine.CLOCK) = struct
 
     val mutable x_req = Z.zero
     val mutable y_req = Z.zero
+    val mutable is_derive_key = true
 
     method! allowed_methods rd =
       Wm.continue [`POST] rd
@@ -156,6 +157,12 @@ module Dispatcher (H:Cohttp_lwt.S.Server)(Clock:Webmachine.CLOCK) = struct
         if not (crv_req = crv) then
           failwith ("Curve doesn't match: " ^ crv_req)
         else
+        let key_ops = YB.Util.member "key_ops" data in
+        is_derive_key <- begin match key_ops with
+          | `List l -> YB.Util.filter_string l |> List.mem "deriveKey"
+          | `Null -> true
+          | _ -> false
+          end;
         x_req <- json_string "x" data |> z_of_b64;
         y_req <- json_string "y" data |> z_of_b64;
         Wm.continue false rd
@@ -165,6 +172,9 @@ module Dispatcher (H:Cohttp_lwt.S.Server)(Clock:Webmachine.CLOCK) = struct
           let resp_body = `String (YB.to_string ~std:true json) in
           Wm.continue true { rd with Wm.Rd.resp_body }
       end
+
+    method! forbidden rd =
+      Wm.continue (not is_derive_key) rd
 
     method! process_post rd =
       begin try
