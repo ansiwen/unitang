@@ -81,6 +81,7 @@ module Dispatcher (H:Cohttp_lwt.S.Server)(Clock:Webmachine.CLOCK) = struct
     | "P-521" -> (module Curve.P521)
     | "P-224" -> (module Curve.P224)
     | "P-192" -> (module Curve.P192)
+    | "X25519" -> (module Curve.C25519)
     | _ -> failwith ("Unsuported curve: " ^ crv)
     in
     c
