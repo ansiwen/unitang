@@ -1,5 +1,5 @@
 open Big_int_Z
-open Ecc
+open Cafeaulait
 
 module P192BIT = struct
   type element = Z.t
